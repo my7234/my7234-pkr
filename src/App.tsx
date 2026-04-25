@@ -11,8 +11,11 @@ export default function App() {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
   const [whatsappLink, setWhatsappLink] = useState("https://wa.me/+923000000000");
-  const [newScreenshot, setNewScreenshot] = useState({ title: '', description: '', url: '' });
+  const [newScreenshot, setNewScreenshot] = useState({ title: '', description: '', url: '', category: 'screenshot' as Category });
+  const [activeCategory, setActiveCategory] = useState<Category>('screenshot');
   const [isUploading, setIsUploading] = useState(false);
+  const [pin, setPin] = useState("");
+  const [showPinInput, setShowPinInput] = useState(false);
 
   const IMGBB_API_KEY = "a61f78ce57584c52be3bf12d8b3e7109";
 
@@ -20,7 +23,12 @@ export default function App() {
   useEffect(() => {
     const saved = localStorage.getItem('betpro_screenshots');
     if (saved) {
-      setScreenshots(JSON.parse(saved));
+      // Migrate old data if necessary (adding category 'screenshot' to existing ones)
+      const parsed = JSON.parse(saved).map((s: any) => ({
+        ...s,
+        category: s.category || 'screenshot'
+      }));
+      setScreenshots(parsed);
     }
     const savedWA = localStorage.getItem('betpro_whatsapp');
     if (savedWA) {
@@ -28,10 +36,11 @@ export default function App() {
     }
   }, []);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetCategory?: Category) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (targetCategory) setActiveCategory(targetCategory);
     setIsUploading(true);
     const formData = new FormData();
     formData.append('image', file);
@@ -43,7 +52,7 @@ export default function App() {
       });
       const data = await response.json();
       if (data.success) {
-        setNewScreenshot(prev => ({ ...prev, url: data.data.url }));
+        setNewScreenshot(prev => ({ ...prev, url: data.data.url, category: targetCategory || prev.category }));
       } else {
         alert("Upload failed. Please check your API key or image format.");
       }
@@ -64,6 +73,8 @@ export default function App() {
     // If it's a click on something that isn't interactive, go to WhatsApp
     const target = e.target as HTMLElement;
     if (
+      target.closest('header') ||
+      target.closest('footer') ||
       target.closest('.interactive') ||
       target.closest('.admin-element')
     ) {
@@ -72,13 +83,16 @@ export default function App() {
     window.open(whatsappLink, '_blank');
   };
 
-  const handleUnlock = () => {
-    const code = prompt("Enter Admin Code:");
-    if (code === ADMIN_CODE) {
+  const handleUnlockSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin === ADMIN_CODE) {
       setIsAdmin(true);
       setShowAdminPanel(true);
-    } else if (code !== null) {
+      setShowPinInput(false);
+      setPin("");
+    } else {
       alert("Invalid Code");
+      setPin("");
     }
   };
 
@@ -91,118 +105,192 @@ export default function App() {
       title: newScreenshot.title,
       description: newScreenshot.description,
       createdAt: Date.now(),
+      category: newScreenshot.category,
     };
 
     saveScreenshots([newItem, ...screenshots]);
-    setNewScreenshot({ title: '', description: '', url: '' });
+    setNewScreenshot({ title: '', description: '', url: '', category: 'screenshot' });
   };
 
   const deleteScreenshot = (id: string) => {
     saveScreenshots(screenshots.filter(s => s.id !== id));
   };
 
+  const racingItems = screenshots.filter(s => s.category === 'racing');
+  const screenshotItems = screenshots.filter(s => s.category === 'screenshot');
+
   return (
     <div 
-      className="min-h-screen bg-black flex flex-col cursor-pointer"
+      className="min-h-screen bg-black flex flex-col cursor-pointer overflow-x-hidden"
       onClick={handleGlobalClick}
     >
       {/* Header */}
-      <header className="py-8 px-6 border-b border-white/10 bg-black/50 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
+      <header className="py-4 md:py-8 px-4 md:px-6 border-b border-white/10 bg-black/50 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto flex justify-between items-center gap-4">
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-3"
+            className="flex items-center gap-2 md:gap-3 shrink"
           >
-            <div className="w-10 h-10 rounded-full bg-gold-500 flex items-center justify-center">
-              <span className="text-black font-bold text-xl">B</span>
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gold-500 flex items-center justify-center shrink-0">
+              <span className="text-black font-bold text-lg md:text-xl">B</span>
             </div>
-            <h1 className="font-serif text-3xl font-bold tracking-tight gold-text">
-              BETPRO <span className="text-white font-light text-sm italic ml-1">Official</span>
+            <h1 className="flex flex-col min-w-0">
+              <span className="font-serif text-xl md:text-3xl font-bold tracking-tighter gold-text leading-none uppercase truncate">PRO MAN</span>
+              <span className="text-[8px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-[0.3em] text-white/40 font-bold ml-0.5 whitespace-nowrap">Premium Trading</span>
             </h1>
+            <div className="hidden sm:block px-2 py-0.5 rounded-md border border-gold-500/30 bg-gold-500/5 backdrop-blur-sm shrink-0">
+              <span className="text-[9px] font-bold text-gold-500 tracking-widest uppercase">Official</span>
+            </div>
           </motion.div>
 
           <a 
             href={whatsappLink} 
             target="_blank" 
-            className="interactive px-6 py-2 bg-gold-500 text-black font-bold rounded-full hover:bg-gold-400 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(196,150,44,0.3)]"
+            className="interactive px-4 md:px-6 py-2 bg-gold-500 text-black text-sm md:text-base font-bold rounded-full hover:bg-gold-400 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(196,150,44,0.3)] whitespace-nowrap shrink-0"
           >
-            JOIN NOW <Send size={18} />
+            JOIN <span className="hidden xs:inline">NOW</span> <Send size={16} />
           </a>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-6xl mx-auto w-full p-6 py-12">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 md:px-6 py-8 md:py-12">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
+          className="text-center mb-12 md:mb-16"
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="inline-block px-4 py-1 rounded-full border border-gold-500/30 text-gold-500 text-xs font-bold tracking-widest mb-6 uppercase"
+            className="inline-block px-3 py-1 rounded-full border border-gold-500/30 text-gold-500 text-[10px] md:text-xs font-bold tracking-widest mb-4 md:mb-6 uppercase"
           >
             Verified Winning Strategies
           </motion.div>
-          <h2 className="text-5xl md:text-7xl font-serif font-bold mb-6 gold-text">
+          <h2 className="text-4xl sm:text-5xl md:text-7xl font-serif font-bold mb-4 md:mb-6 gold-text leading-tight px-2">
             Premium Trading Experience
           </h2>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto font-light leading-relaxed mb-8">
+          <p className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto font-light leading-relaxed mb-6 md:mb-8 px-4">
             Experience the most reliable and secure betting platform. 
             Real wins, instant payments, and 24/7 support.
           </p>
 
           <motion.div 
             whileHover={{ y: -5 }}
-            className="bg-neutral-900/50 border border-gold-500/20 p-8 rounded-[2.5rem] max-w-3xl mx-auto backdrop-blur-sm relative overflow-hidden"
+            className="bg-neutral-900/50 border border-gold-500/20 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] max-w-3xl mx-auto backdrop-blur-sm relative overflow-hidden"
           >
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <span className="text-8xl font-serif italic text-gold-500">30%</span>
+            <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 pointer-events-none">
+              <span className="text-6xl md:text-8xl font-serif italic text-gold-500">30%</span>
             </div>
-            <p className="text-2xl md:text-3xl font-serif leading-tight text-white mb-4">
+            <p className="text-xl md:text-3xl font-serif leading-tight text-white mb-3 md:mb-4 relative z-10">
               Agr aap jeetna chahte hen to Hume <span className="gold-text font-bold">join kren</span>
             </p>
-            <p className="text-gold-400 text-xl font-light italic">
+            <p className="text-gold-400 text-lg md:text-xl font-light italic relative z-10">
               30% commission pe lakhon jitne ka Mauka payen!
             </p>
-            <div className="mt-8 flex justify-center gap-4">
-              <div className="h-1 w-20 bg-gold-500 rounded-full" />
-              <div className="h-1 w-12 bg-white/10 rounded-full" />
-              <div className="h-1 w-8 bg-white/10 rounded-full" />
+            <div className="mt-6 md:mt-8 flex justify-center gap-2 md:gap-4 relative z-10">
+              <div className="h-1 w-12 md:w-20 bg-gold-500 rounded-full" />
+              <div className="h-1 w-8 md:w-12 bg-white/10 rounded-full" />
+              <div className="h-1 w-6 md:w-8 bg-white/10 rounded-full" />
             </div>
           </motion.div>
         </motion.div>
 
+        {/* Racing Section */}
+        {racingItems.length > 0 && (
+          <section className="mb-20">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-4 mb-8"
+            >
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gold-500/30" />
+              <h2 className="text-3xl font-serif font-bold gold-text">Greyhound & Horse Racing</h2>
+              <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gold-500/30" />
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+              {racingItems.map((s, idx) => (
+                <motion.div
+                  key={s.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="interactive group relative aspect-video rounded-[1.5rem] md:rounded-[2.5rem] overflow-hidden border border-gold-500/20 shadow-[0_0_30px_rgba(196,150,44,0.1)]"
+                >
+                  <img 
+                    src={s.url} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" 
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                  
+                  {/* Animation elements */}
+                  <div className="absolute top-3 left-3 md:top-4 md:left-4 flex gap-2">
+                    <motion.div 
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-red-500 shadow-[0_0_10px_red]"
+                    />
+                    <span className="text-[8px] md:text-[10px] font-bold text-white uppercase tracking-widest bg-red-500/80 px-2 rounded">Live Racing</span>
+                  </div>
+
+                  <div className="absolute bottom-0 left-0 p-4 md:p-8 w-full">
+                    <h3 className="text-xl md:text-2xl font-bold text-white mb-1 md:mb-2 line-clamp-1">{s.title}</h3>
+                    <p className="text-gold-300 font-medium text-[10px] md:text-sm italic line-clamp-1">{s.description}</p>
+                  </div>
+
+                  {/* Animated Overlay for "Movement" */}
+                  <motion.div 
+                    animate={{ x: ['100%', '-100%'] }}
+                    transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none"
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-4 mb-8"
+        >
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent to-white/10" />
+          <h2 className="text-2xl font-serif font-bold text-white/50">Recent Wins & Proof</h2>
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-white/10" />
+        </motion.div>
+
         {/* Screenshot Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-          {screenshots.length === 0 ? (
-            <div className="col-span-full py-20 text-center border-2 border-dashed border-white/10 rounded-3xl">
-              <ImageIcon className="mx-auto mb-4 text-gray-600" size={48} />
-              <p className="text-gray-500 italic">No screenshots uploaded yet.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 pb-12 md:pb-20">
+          {screenshotItems.length === 0 ? (
+            <div className="col-span-full py-12 md:py-20 text-center border-2 border-dashed border-white/10 rounded-2xl md:rounded-3xl">
+              <ImageIcon className="mx-auto mb-4 text-gray-600" size={40} md:size={48} />
+              <p className="text-gray-500 italic text-sm">No winning proof uploaded yet.</p>
             </div>
           ) : (
-            screenshots.map((s, idx) => (
+            screenshotItems.map((s, idx) => (
               <motion.div
                 key={s.id}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: idx * 0.1 }}
-                className="interactive group relative bg-neutral-900 rounded-3xl overflow-hidden border border-white/5 hover:border-gold-500/50 transition-all shadow-xl"
+                className="interactive group relative bg-neutral-900 rounded-2xl md:rounded-3xl overflow-hidden border border-white/5 hover:border-gold-500/50 transition-all shadow-xl"
               >
-                <div className="aspect-[9/16] overflow-hidden relative">
+                <div className="relative group/img overflow-hidden">
                   <img 
                     src={s.url} 
                     alt={s.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                    className="w-full h-auto min-h-[200px] object-cover sm:object-contain bg-black transition-transform duration-700" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80 group-hover/img:opacity-40 transition-opacity" />
                 </div>
-                <div className="p-6 absolute bottom-0 left-0 right-0">
-                  <h3 className="text-xl font-bold text-gold-200 mb-1">{s.title}</h3>
-                  <p className="text-gray-400 text-sm line-clamp-2">{s.description}</p>
+                <div className="p-4 md:p-6 absolute bottom-0 left-0 right-0">
+                  <h3 className="text-lg md:text-xl font-bold text-gold-200 mb-0.5 md:mb-1">{s.title}</h3>
+                  <p className="text-gray-400 text-xs md:text-sm line-clamp-2">{s.description}</p>
                 </div>
               </motion.div>
             ))
@@ -211,22 +299,49 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="py-12 px-6 border-t border-white/5 bg-neutral-950 mt-auto">
+      <footer className="py-12 px-6 border-t border-white/5 bg-neutral-950 mt-auto relative z-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-center md:text-left">
-            <h3 className="gold-text font-serif text-2xl font-bold mb-2 italic">BETPRO</h3>
+            <h3 className="gold-text font-serif text-2xl font-bold mb-2 italic uppercase">PRO MAN</h3>
             <p className="text-gray-600 text-sm">© 2026 Premium Gaming Solutions. All rights reserved.</p>
           </div>
           
-          <div className="flex items-center gap-6 text-gray-500">
+          <div className="flex items-center gap-6 text-gray-500 relative">
             <a href="#" className="hover:text-gold-500 transition-colors">Privacy</a>
             <a href="#" className="hover:text-gold-500 transition-colors">Terms</a>
+            
+            <AnimatePresence>
+              {showPinInput && (
+                <motion.form 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  onSubmit={handleUnlockSubmit}
+                  className="absolute bottom-full right-0 mb-4 flex gap-2 bg-neutral-900 p-3 rounded-2xl border border-gold-500/30 shadow-2xl admin-element z-50 min-w-[160px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input 
+                    autoFocus
+                    type="password" 
+                    placeholder="PIN" 
+                    className="bg-black border border-white/10 rounded-lg px-3 py-2 text-sm w-full outline-none focus:border-gold-500/50 text-white"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                  />
+                  <button type="submit" className="bg-gold-500 text-black px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap">UNLOCK</button>
+                </motion.form>
+              )}
+            </AnimatePresence>
+
             <button 
-              onClick={handleUnlock}
-              className="admin-element opacity-20 hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-white/5"
-              title="Admin"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPinInput(!showPinInput);
+              }}
+              className="admin-element opacity-[0.03] hover:opacity-100 transition-all p-3 rounded-xl border border-white/5 hover:bg-gold-500/10 hover:border-gold-500/20 relative z-50 group hover:scale-110"
+              title="Admin Access"
             >
-              <Lock size={16} />
+              <Lock size={14} className="text-white group-hover:text-gold-500 transition-colors" />
             </button>
           </div>
         </div>
@@ -241,112 +356,173 @@ export default function App() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl admin-element"
           >
-            <motion.div 
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              className="bg-neutral-900 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2rem] border border-gold-500/30 p-8 shadow-[0_0_50px_rgba(196,150,44,0.1)]"
-            >
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-3xl font-serif font-bold gold-text flex items-center gap-3">
-                    <Settings /> Admin Panel
-                  </h2>
-                  <p className="text-gray-500 text-sm">Manage your Betpro landing page</p>
-                </div>
-                <button 
-                  onClick={() => setShowAdminPanel(false)}
-                  className="p-3 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
-                >
-                  <X />
-                </button>
+          <motion.div 
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-neutral-900 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl md:rounded-[2rem] border border-gold-500/30 p-4 md:p-8 shadow-[0_0_50px_rgba(196,150,44,0.1)] mx-2"
+          >
+            <div className="flex justify-between items-center mb-6 md:mb-8">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-serif font-bold gold-text flex items-center gap-2 md:gap-3">
+                  <Settings className="w-6 h-6 md:w-8 md:h-8" /> Admin Panel
+                </h2>
+                <p className="text-gray-500 text-xs md:text-sm">Manage your Pro Man page</p>
               </div>
+              <button 
+                onClick={() => setShowAdminPanel(false)}
+                className="p-2 md:p-3 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-              {/* Global Settings */}
-              <section className="mb-12 p-6 bg-black/30 rounded-3xl border border-white/5">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-white">
-                  <ExternalLink size={20} className="text-gold-500" /> Page Settings
-                </h3>
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-gray-500 uppercase tracking-widest px-1">WhatsApp Redirect Link</label>
-                  <input 
-                    type="text" 
-                    placeholder="https://wa.me/..." 
-                    className="bg-black/50 border border-white/10 rounded-xl p-3 focus:border-gold-500/50 outline-none transition-all text-white w-full"
-                    value={whatsappLink}
-                    onChange={(e) => {
-                      setWhatsappLink(e.target.value);
-                      localStorage.setItem('betpro_whatsapp', e.target.value);
-                    }}
-                  />
-                </div>
-              </section>
+            {/* Global Settings */}
+            <section className="mb-8 md:mb-12 p-4 md:p-6 bg-black/30 rounded-2xl md:rounded-3xl border border-white/5">
+              <h3 className="text-base md:text-lg font-bold mb-3 md:mb-4 flex items-center gap-2 text-white">
+                <ExternalLink size={18} md:size={20} className="text-gold-500" /> Page Settings
+              </h3>
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] md:text-xs text-gray-500 uppercase tracking-widest px-1">WhatsApp Redirect Link</label>
+                <input 
+                  type="text" 
+                  placeholder="https://wa.me/..." 
+                  className="bg-black/50 border border-white/10 rounded-xl p-2.5 md:p-3 focus:border-gold-500/50 outline-none transition-all text-white w-full text-sm"
+                  value={whatsappLink}
+                  onChange={(e) => {
+                    setWhatsappLink(e.target.value);
+                    localStorage.setItem('betpro_whatsapp', e.target.value);
+                  }}
+                />
+              </div>
+            </section>
 
-              {/* Upload Section */}
-              <section className="mb-12">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-white">
-                  <Plus size={20} className="text-gold-500" /> Add New Screenshot
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs text-gray-500 uppercase tracking-widest mb-2 px-1">Select Screenshot File</label>
-                    <div className="relative group">
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                        disabled={isUploading}
-                      />
-                      <div className={`border-2 border-dashed ${isUploading ? 'border-gold-500/50 bg-gold-500/5' : 'border-white/10 bg-black/50'} rounded-2xl p-8 flex flex-col items-center justify-center transition-all group-hover:border-gold-500/30`}>
-                        {isUploading ? (
-                          <div className="flex flex-col items-center gap-3">
-                            <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
-                            <p className="text-gold-500 text-sm font-medium">Uploading to ImgBB...</p>
-                          </div>
-                        ) : newScreenshot.url ? (
-                          <div className="flex flex-col items-center gap-2">
-                            <img src={newScreenshot.url} className="w-20 h-20 object-cover rounded-lg border border-gold-500/50" />
-                            <p className="text-green-500 text-sm">Image Uploaded Successfully!</p>
-                          </div>
-                        ) : (
-                          <>
-                            <ImageIcon className="text-gray-600 mb-2" size={32} />
-                            <p className="text-gray-400 text-sm italic">Click or drag image to upload</p>
-                          </>
-                        )}
-                      </div>
+            {/* Racing Upload Section */}
+            <section className="mb-8 md:mb-12 p-4 md:p-6 bg-gold-500/5 rounded-2xl md:rounded-3xl border border-gold-500/20">
+              <h3 className="text-base md:text-lg font-bold mb-3 md:mb-4 flex items-center gap-2 text-white">
+                <Plus size={18} md:size={20} className="text-gold-500" /> Racing Content
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] md:text-xs text-gray-500 uppercase tracking-widest mb-2 px-1">Racing Image (Dog/Horse)</label>
+                  <div className="relative group">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => handleFileUpload(e, 'racing')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      disabled={isUploading}
+                    />
+                    <div className={`border-2 border-dashed ${isUploading && activeCategory === 'racing' ? 'border-gold-500/50 bg-gold-500/5' : 'border-white/10 bg-black/50'} rounded-xl md:rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center transition-all`}>
+                      {isUploading && activeCategory === 'racing' ? (
+                        <div className="flex flex-col items-center gap-2 md:gap-3">
+                          <div className="w-6 h-6 md:w-8 md:h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+                          <p className="text-gold-500 text-[10px] md:text-sm font-medium">Uploading...</p>
+                        </div>
+                      ) : newScreenshot.url && newScreenshot.category === 'racing' ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <img src={newScreenshot.url} className="w-12 h-12 md:w-20 md:h-20 object-cover rounded-lg border border-gold-500/50" />
+                          <p className="text-green-500 text-[10px] md:text-sm">Ready!</p>
+                        </div>
+                      ) : (
+                        <>
+                          <ImageIcon className="text-gray-600 mb-2" size={24} md:size={32} />
+                          <p className="text-gray-400 text-[10px] md:text-sm italic text-center">Click to upload Dog/Horse Image</p>
+                        </>
+                      )}
                     </div>
                   </div>
-
-                  <input 
-                    type="text" 
-                    placeholder="Title (e.g., Big Win Today)" 
-                    className="bg-black/50 border border-white/10 rounded-xl p-3 focus:border-gold-500/50 outline-none transition-all text-white"
-                    value={newScreenshot.title}
-                    onChange={(e) => setNewScreenshot({...newScreenshot, title: e.target.value})}
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Image URL (Auto-filled on upload)" 
-                    className="bg-black/50 border border-white/10 rounded-xl p-3 focus:border-gold-500/50 outline-none transition-all text-white opacity-50"
-                    value={newScreenshot.url}
-                    readOnly
-                  />
-                  <textarea 
-                    placeholder="Description (Optional details)" 
-                    className="bg-black/50 border border-white/10 rounded-xl p-3 focus:border-gold-500/50 outline-none transition-all text-white md:col-span-2 min-h-[100px]"
-                    value={newScreenshot.description}
-                    onChange={(e) => setNewScreenshot({...newScreenshot, description: e.target.value})}
-                  />
-                  <button 
-                    onClick={addScreenshot}
-                    disabled={isUploading || !newScreenshot.url || !newScreenshot.title}
-                    className="md:col-span-2 py-4 bg-gold-500 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold rounded-xl hover:bg-gold-400 transition-all flex items-center justify-center gap-2"
-                  >
-                    {isUploading ? 'PLEASE WAIT...' : 'PUBLISH TO HOME PAGE'} <Send size={18} />
-                  </button>
                 </div>
-              </section>
+                <input 
+                  type="text" 
+                  placeholder="Racing Title" 
+                  className="bg-black/50 border border-white/10 rounded-xl p-2.5 md:p-3 focus:border-gold-500/50 outline-none transition-all text-white text-sm"
+                  value={activeCategory === 'racing' ? newScreenshot.title : ''}
+                  onChange={(e) => setNewScreenshot({...newScreenshot, title: e.target.value, category: 'racing'})}
+                />
+                <input 
+                  type="text" 
+                  placeholder="Subtitle" 
+                  className="bg-black/50 border border-white/10 rounded-xl p-2.5 md:p-3 focus:border-gold-500/50 outline-none transition-all text-white text-sm"
+                  value={activeCategory === 'racing' ? newScreenshot.description : ''}
+                  onChange={(e) => setNewScreenshot({...newScreenshot, description: e.target.value, category: 'racing'})}
+                />
+                <button 
+                  onClick={addScreenshot}
+                  disabled={isUploading || !newScreenshot.url || newScreenshot.category !== 'racing'}
+                  className="md:col-span-2 py-3 md:py-4 bg-gold-500 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold rounded-xl hover:bg-gold-400 transition-all text-sm md:text-base"
+                >
+                  ADD RACING CONTENT
+                </button>
+              </div>
+            </section>
+
+            {/* Upload Section */}
+            <section className="mb-8 md:mb-12">
+              <h3 className="text-base md:text-lg font-bold mb-3 md:mb-4 flex items-center gap-2 text-white">
+                <Plus size={18} md:size={20} className="text-gold-500" /> Professional Screenshots
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] md:text-xs text-gray-500 uppercase tracking-widest mb-2 px-1">Screenshot File</label>
+                  <div className="relative group">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => handleFileUpload(e, 'screenshot')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      disabled={isUploading}
+                    />
+                    <div className={`border-2 border-dashed ${isUploading && activeCategory === 'screenshot' ? 'border-gold-500/50 bg-gold-500/5' : 'border-white/10 bg-black/50'} rounded-xl md:rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center transition-all group-hover:border-gold-500/30`}>
+                      {isUploading && activeCategory === 'screenshot' ? (
+                        <div className="flex flex-col items-center gap-2 md:gap-3">
+                          <div className="w-6 h-6 md:w-8 md:h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+                          <p className="text-gold-500 text-[10px] md:text-sm font-medium text-center">Uploading...</p>
+                        </div>
+                      ) : newScreenshot.url && newScreenshot.category === 'screenshot' ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <img src={newScreenshot.url} className="w-12 h-12 md:w-20 md:h-20 object-cover rounded-lg border border-gold-500/50" />
+                          <p className="text-green-500 text-[10px] md:text-sm">Ready!</p>
+                        </div>
+                      ) : (
+                        <>
+                          <ImageIcon className="text-gray-600 mb-2" size={24} md:size={32} />
+                          <p className="text-gray-400 text-[10px] md:text-sm italic text-center">Select Winning Proof Image</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <input 
+                  type="text" 
+                  placeholder="Title" 
+                  className="bg-black/50 border border-white/10 rounded-xl p-2.5 md:p-3 focus:border-gold-500/50 outline-none transition-all text-white text-sm"
+                  value={activeCategory === 'screenshot' ? newScreenshot.title : ''}
+                  onChange={(e) => setNewScreenshot({...newScreenshot, title: e.target.value, category: 'screenshot'})}
+                />
+                <input 
+                  type="text" 
+                  placeholder="Image URL" 
+                  className="bg-black/50 border border-white/10 rounded-xl p-2.5 md:p-3 focus:border-gold-500/50 outline-none transition-all text-white opacity-50 text-sm"
+                  value={newScreenshot.category === 'screenshot' ? newScreenshot.url : ''}
+                  readOnly
+                />
+                <textarea 
+                  placeholder="Description" 
+                  className="bg-black/50 border border-white/10 rounded-xl p-2.5 md:p-3 focus:border-gold-500/50 outline-none transition-all text-white md:col-span-2 min-h-[80px] md:min-h-[100px] text-sm"
+                  value={activeCategory === 'screenshot' ? newScreenshot.description : ''}
+                  onChange={(e) => setNewScreenshot({...newScreenshot, description: e.target.value, category: 'screenshot'})}
+                />
+                <button 
+                  onClick={addScreenshot}
+                  disabled={isUploading || !newScreenshot.url || newScreenshot.category !== 'screenshot'}
+                  className="md:col-span-2 py-3 md:py-4 bg-gold-500 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold rounded-xl hover:bg-gold-400 transition-all flex items-center justify-center gap-2 text-sm md:text-base"
+                >
+                  {isUploading ? 'PLEASE WAIT...' : 'PUBLISH TO HOME'} <Send size={16} md:size={18} />
+                </button>
+              </div>
+            </section>
 
               {/* Manage Section */}
               <section>

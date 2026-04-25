@@ -29,5 +29,9 @@
 }
 
 @utility gold-text {
-  @apply text-transparent bg-clip-text premium-gradient;
+  background: linear-gradient(135deg, #FFD700 0%, #D4AF37 50%, #B8860B 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
 }
