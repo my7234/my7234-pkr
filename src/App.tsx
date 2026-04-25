@@ -21,16 +21,15 @@ export default function App() {
 
   // Load from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('betpro_screenshots');
+    const saved = localStorage.getItem('proman_screenshots');
     if (saved) {
-      // Migrate old data if necessary (adding category 'screenshot' to existing ones)
       const parsed = JSON.parse(saved).map((s: any) => ({
         ...s,
         category: s.category || 'screenshot'
       }));
       setScreenshots(parsed);
     }
-    const savedWA = localStorage.getItem('betpro_whatsapp');
+    const savedWA = localStorage.getItem('proman_whatsapp');
     if (savedWA) {
       setWhatsappLink(savedWA);
     }
@@ -66,7 +65,7 @@ export default function App() {
 
   const saveScreenshots = (data: Screenshot[]) => {
     setScreenshots(data);
-    localStorage.setItem('betpro_screenshots', JSON.stringify(data));
+    localStorage.setItem('proman_screenshots', JSON.stringify(data));
   };
 
   const handleGlobalClick = (e: React.MouseEvent) => {
@@ -362,12 +361,12 @@ export default function App() {
             className="bg-neutral-900 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl md:rounded-[2rem] border border-gold-500/30 p-4 md:p-8 shadow-[0_0_50px_rgba(196,150,44,0.1)] mx-2"
           >
             <div className="flex justify-between items-center mb-6 md:mb-8">
-              <div>
-                <h2 className="text-2xl md:text-3xl font-serif font-bold gold-text flex items-center gap-2 md:gap-3">
-                  <Settings className="w-6 h-6 md:w-8 md:h-8" /> Admin Panel
-                </h2>
-                <p className="text-gray-500 text-xs md:text-sm">Manage your Pro Man page</p>
-              </div>
+                <div>
+                  <h2 className="text-xl md:text-3xl font-serif font-bold gold-text flex items-center gap-2 md:gap-3">
+                    <Settings className="w-5 h-5 md:w-8 md:h-8" /> Admin Panel
+                  </h2>
+                  <p className="text-gray-500 text-[10px] md:text-sm">Manage your Pro Man page</p>
+                </div>
               <button 
                 onClick={() => setShowAdminPanel(false)}
                 className="p-2 md:p-3 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
@@ -391,7 +390,7 @@ export default function App() {
                   value={whatsappLink}
                   onChange={(e) => {
                     setWhatsappLink(e.target.value);
-                    localStorage.setItem('betpro_whatsapp', e.target.value);
+                    localStorage.setItem('proman_whatsapp', e.target.value);
                   }}
                 />
               </div>
