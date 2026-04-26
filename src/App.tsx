@@ -82,11 +82,14 @@ export default function App() {
 
   const IMGBB_API_KEY = "a61f78ce57584c52be3bf12d8b3e7109";
 
+  const [isOffline, setIsOffline] = useState(false);
+
   // Load from Firestore
   useEffect(() => {
     // Listen for screenshots
     const q = query(collection(db, 'screenshots'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      setIsOffline(false);
       const items = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -94,7 +97,9 @@ export default function App() {
       setScreenshots(items);
     }, (error) => {
       console.error("Firestore Listen Error:", error);
-      if (!error.message.includes('offline')) {
+      if (error.message.includes('offline')) {
+        setIsOffline(true);
+      } else {
         handleFirestoreError(error, OperationType.LIST, 'screenshots');
       }
     });
@@ -211,6 +216,11 @@ export default function App() {
       className="min-h-screen bg-black flex flex-col cursor-pointer overflow-x-hidden"
       onClick={handleGlobalClick}
     >
+      {isOffline && (
+        <div className="bg-red-500/80 text-white text-[10px] md:text-xs text-center py-1 font-bold z-[100] sticky top-0">
+          FIRESTORE IS OFFLINE - CHECK FIREBASE CONSOLE & DATABASE SETUP
+        </div>
+      )}
       {/* Header */}
       <header className="py-4 md:py-8 px-4 md:px-6 border-b border-white/10 bg-black/50 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-6xl mx-auto flex justify-between items-center gap-4">
