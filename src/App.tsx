@@ -113,9 +113,12 @@ export default function App() {
       setScreenshots(items);
       localStorage.setItem('proman_screenshots_backup', JSON.stringify(items));
     }, (error) => {
-      console.error("Firestore Error:", error);
+      console.error("Firestore Sync Error:", error);
       if (error.message.includes('offline')) {
         setIsOffline(true);
+      } else {
+        // Index issue ya permissions issue dikhane ke liye alert
+        console.warn("Possible Firestore Error (Check Console for Link):", error.message);
       }
     });
 
@@ -178,15 +181,19 @@ export default function App() {
 
   const handleGlobalClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+    // Header, Footer aur Admin elements ko chorr kar poore page pe click allow kren
     if (
       target.closest('header') ||
       target.closest('footer') ||
-      target.closest('.interactive') ||
-      target.closest('.admin-element')
+      target.closest('.admin-element') ||
+      target.closest('button') ||
+      target.closest('a')
     ) {
       return;
     }
-    window.open(whatsappLink, '_blank');
+    if (whatsappLink) {
+      window.open(whatsappLink, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const handleUnlockSubmit = (e: React.FormEvent) => {
@@ -226,6 +233,7 @@ export default function App() {
         createdAt: Date.now(),
         category: newScreenshot.category,
       });
+      alert("Online Save Ho Gya Hai!");
       setNewScreenshot({ title: '', description: '', url: '', category: 'screenshot' });
     } catch (err) {
       if (err instanceof Error && err.message.includes('offline')) {
