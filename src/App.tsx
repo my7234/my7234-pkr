@@ -1,10 +1,73 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lock, Plus, Trash2, X, Image as ImageIcon, Send, ExternalLink, Settings } from 'lucide-react';
-import { Screenshot } from './types.ts';
+import { Screenshot, Category } from './types.ts';
+import { db } from './firebase';
+import { 
+  collection, 
+  addDoc, 
+  deleteDoc, 
+  doc, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  setDoc, 
+  getDoc,
+  getDocFromServer
+} from 'firebase/firestore';
+import { auth } from './firebase';
 
 const ADMIN_CODE = "723424";
-const WHATSAPP_LINK = "https://wa.me/+923000000000"; // User can change this or I can add a field
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  if (errInfo.error.includes('offline')) {
+    console.warn("Firestore client is offline. This usually means the project configuration matches but the database might not be initialized or accessible from this network.");
+  }
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -19,20 +82,46 @@ export default function App() {
 
   const IMGBB_API_KEY = "a61f78ce57584c52be3bf12d8b3e7109";
 
-  // Load from localStorage
+  // Load from Firestore
   useEffect(() => {
-    const saved = localStorage.getItem('proman_screenshots');
-    if (saved) {
-      const parsed = JSON.parse(saved).map((s: any) => ({
-        ...s,
-        category: s.category || 'screenshot'
-      }));
-      setScreenshots(parsed);
-    }
-    const savedWA = localStorage.getItem('proman_whatsapp');
-    if (savedWA) {
-      setWhatsappLink(savedWA);
-    }
+    // Connectivity Test
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('offline')) {
+          console.error("Firestore test failed: Client is offline. Please check if Firestore is enabled in your project and the config is correct.");
+        }
+      }
+    };
+    testConnection();
+
+    // Listen for screenshots
+    const q = query(collection(db, 'screenshots'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Screenshot[];
+      setScreenshots(items);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'screenshots');
+    });
+
+    // Load WhatsApp link
+    const loadWA = async () => {
+      try {
+        const waDoc = await getDoc(doc(db, 'settings', 'whatsapp'));
+        if (waDoc.exists()) {
+          setWhatsappLink(waDoc.data().link);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, 'settings/whatsapp');
+      }
+    };
+    loadWA();
+
+    return () => unsubscribe();
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetCategory?: Category) => {
@@ -63,13 +152,16 @@ export default function App() {
     }
   };
 
-  const saveScreenshots = (data: Screenshot[]) => {
-    setScreenshots(data);
-    localStorage.setItem('proman_screenshots', JSON.stringify(data));
+  const updateWhatsappLink = async (link: string) => {
+    setWhatsappLink(link);
+    try {
+      await setDoc(doc(db, 'settings', 'whatsapp'), { link });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'settings/whatsapp');
+    }
   };
 
   const handleGlobalClick = (e: React.MouseEvent) => {
-    // If it's a click on something that isn't interactive, go to WhatsApp
     const target = e.target as HTMLElement;
     if (
       target.closest('header') ||
@@ -95,24 +187,29 @@ export default function App() {
     }
   };
 
-  const addScreenshot = () => {
+  const addScreenshot = async () => {
     if (!newScreenshot.url || !newScreenshot.title) return;
     
-    const newItem: Screenshot = {
-      id: Date.now().toString(),
-      url: newScreenshot.url,
-      title: newScreenshot.title,
-      description: newScreenshot.description,
-      createdAt: Date.now(),
-      category: newScreenshot.category,
-    };
-
-    saveScreenshots([newItem, ...screenshots]);
-    setNewScreenshot({ title: '', description: '', url: '', category: 'screenshot' });
+    try {
+      await addDoc(collection(db, 'screenshots'), {
+        url: newScreenshot.url,
+        title: newScreenshot.title,
+        description: newScreenshot.description,
+        createdAt: Date.now(),
+        category: newScreenshot.category,
+      });
+      setNewScreenshot({ title: '', description: '', url: '', category: 'screenshot' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'screenshots');
+    }
   };
 
-  const deleteScreenshot = (id: string) => {
-    saveScreenshots(screenshots.filter(s => s.id !== id));
+  const deleteScreenshot = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'screenshots', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `screenshots/${id}`);
+    }
   };
 
   const racingItems = screenshots.filter(s => s.category === 'racing');
@@ -389,8 +486,7 @@ export default function App() {
                   className="bg-black/50 border border-white/10 rounded-xl p-2.5 md:p-3 focus:border-gold-500/50 outline-none transition-all text-white w-full text-sm"
                   value={whatsappLink}
                   onChange={(e) => {
-                    setWhatsappLink(e.target.value);
-                    localStorage.setItem('proman_whatsapp', e.target.value);
+                    updateWhatsappLink(e.target.value);
                   }}
                 />
               </div>
