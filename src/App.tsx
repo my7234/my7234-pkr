@@ -84,9 +84,24 @@ export default function App() {
 
   const [isOffline, setIsOffline] = useState(false);
 
-  // Load from Firestore
+  // Load from Firestore & LocalStorage Backup
   useEffect(() => {
-    // Listen for screenshots
+    // 1. Pehle local storage se load kren
+    const localSaved = localStorage.getItem('proman_screenshots_backup');
+    if (localSaved) {
+      try {
+        setScreenshots(JSON.parse(localSaved));
+      } catch (e) {
+        console.error("Local storage error");
+      }
+    }
+
+    const localWA = localStorage.getItem('proman_whatsapp_backup');
+    if (localWA) {
+      setWhatsappLink(localWA);
+    }
+
+    // 2. Firestore Listen
     const q = query(collection(db, 'screenshots'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setIsOffline(false);
@@ -94,30 +109,34 @@ export default function App() {
         id: doc.id,
         ...doc.data()
       })) as Screenshot[];
+      
       setScreenshots(items);
+      localStorage.setItem('proman_screenshots_backup', JSON.stringify(items));
     }, (error) => {
-      console.error("Firestore Listen Error:", error);
+      console.error("Firestore Error:", error);
       if (error.message.includes('offline')) {
         setIsOffline(true);
-      } else {
-        handleFirestoreError(error, OperationType.LIST, 'screenshots');
       }
     });
 
-    // Load WhatsApp link
+    return () => unsubscribe();
+  }, []);
+
+  // WhatsApp link Load
+  useEffect(() => {
     const loadWA = async () => {
       try {
         const waDoc = await getDoc(doc(db, 'settings', 'whatsapp'));
         if (waDoc.exists()) {
-          setWhatsappLink(waDoc.data().link);
+          const link = waDoc.data().link;
+          setWhatsappLink(link);
+          localStorage.setItem('proman_whatsapp_backup', link);
         }
       } catch (error) {
-        console.error("Firestore Load Error:", error);
+        console.log("WA Load Offline");
       }
     };
     loadWA();
-
-    return () => unsubscribe();
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetCategory?: Category) => {
@@ -186,6 +205,19 @@ export default function App() {
   const addScreenshot = async () => {
     if (!newScreenshot.url || !newScreenshot.title) return;
     
+    // Optimistic Update for Local Backup
+    const tempId = Date.now().toString();
+    const newItem: Screenshot = {
+      id: tempId,
+      url: newScreenshot.url,
+      title: newScreenshot.title,
+      description: newScreenshot.description,
+      createdAt: Date.now(),
+      category: newScreenshot.category,
+    };
+    const updatedScreenshots = [newItem, ...screenshots];
+    localStorage.setItem('proman_screenshots_backup', JSON.stringify(updatedScreenshots));
+
     try {
       await addDoc(collection(db, 'screenshots'), {
         url: newScreenshot.url,
@@ -196,15 +228,30 @@ export default function App() {
       });
       setNewScreenshot({ title: '', description: '', url: '', category: 'screenshot' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'screenshots');
+      if (err instanceof Error && err.message.includes('offline')) {
+        console.warn("Saving to local storage only (Firestore is offline)");
+        setScreenshots(updatedScreenshots);
+        setNewScreenshot({ title: '', description: '', url: '', category: 'screenshot' });
+        setIsOffline(true);
+      } else {
+        handleFirestoreError(err, OperationType.CREATE, 'screenshots');
+      }
     }
   };
 
   const deleteScreenshot = async (id: string) => {
+    const updatedList = screenshots.filter(s => s.id !== id);
+    setScreenshots(updatedList);
+    localStorage.setItem('proman_screenshots_backup', JSON.stringify(updatedList));
+
     try {
       await deleteDoc(doc(db, 'screenshots', id));
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `screenshots/${id}`);
+      if (err instanceof Error && err.message.includes('offline')) {
+        setIsOffline(true);
+      } else {
+        handleFirestoreError(err, OperationType.DELETE, `screenshots/${id}`);
+      }
     }
   };
 
@@ -217,8 +264,8 @@ export default function App() {
       onClick={handleGlobalClick}
     >
       {isOffline && (
-        <div className="bg-red-500/80 text-white text-[10px] md:text-xs text-center py-1 font-bold z-[100] sticky top-0">
-          FIRESTORE IS OFFLINE - CHECK FIREBASE CONSOLE & DATABASE SETUP
+        <div className="bg-red-500 text-white text-[10px] md:text-sm text-center py-2 font-bold z-[100] sticky top-0 shadow-lg">
+          DATABASE CONNECT NAHI HO RAHA - IMAGES TEMPORARY SAVE HAIN
         </div>
       )}
       {/* Header */}
