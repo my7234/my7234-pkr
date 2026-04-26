@@ -73,7 +73,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
-  const [whatsappLink, setWhatsappLink] = useState("https://wa.me/923197139789?text=If%20you%20want%20to%20win%2C%20join%20us!");
+  const [whatsappLink, setWhatsappLink] = useState("https://wa.me/923197139789?text=Please%20sir%2C%20help%20me%20win%2C%20I%20will%20be%20very%20thankful%20to%20you!");
   const [newScreenshot, setNewScreenshot] = useState({ title: '', description: '', url: '', category: 'screenshot' as Category });
   const [activeCategory, setActiveCategory] = useState<Category>('screenshot');
   const [isUploading, setIsUploading] = useState(false);
