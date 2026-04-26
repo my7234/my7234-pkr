@@ -84,18 +84,6 @@ export default function App() {
 
   // Load from Firestore
   useEffect(() => {
-    // Connectivity Test
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('offline')) {
-          console.error("Firestore test failed: Client is offline. Please check if Firestore is enabled in your project and the config is correct.");
-        }
-      }
-    };
-    testConnection();
-
     // Listen for screenshots
     const q = query(collection(db, 'screenshots'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -105,7 +93,10 @@ export default function App() {
       })) as Screenshot[];
       setScreenshots(items);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'screenshots');
+      console.error("Firestore Listen Error:", error);
+      if (!error.message.includes('offline')) {
+        handleFirestoreError(error, OperationType.LIST, 'screenshots');
+      }
     });
 
     // Load WhatsApp link
@@ -116,7 +107,7 @@ export default function App() {
           setWhatsappLink(waDoc.data().link);
         }
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'settings/whatsapp');
+        console.error("Firestore Load Error:", error);
       }
     };
     loadWA();
