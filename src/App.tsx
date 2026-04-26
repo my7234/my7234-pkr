@@ -73,7 +73,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
-  const [whatsappLink, setWhatsappLink] = useState("https://wa.me/+923000000000");
+  const [whatsappLink, setWhatsappLink] = useState("https://wa.me/923197139789");
   const [newScreenshot, setNewScreenshot] = useState({ title: '', description: '', url: '', category: 'screenshot' as Category });
   const [activeCategory, setActiveCategory] = useState<Category>('screenshot');
   const [isUploading, setIsUploading] = useState(false);
@@ -171,11 +171,17 @@ export default function App() {
   };
 
   const updateWhatsappLink = async (link: string) => {
-    setWhatsappLink(link);
+    // Normalize number if user only enters digits
+    let formattedLink = link;
+    if (link.match(/^\d+$/)) {
+      formattedLink = `https://wa.me/${link}`;
+    }
+    setWhatsappLink(formattedLink);
     try {
-      await setDoc(doc(db, 'settings', 'whatsapp'), { link });
+      await setDoc(doc(db, 'settings', 'whatsapp'), { link: formattedLink });
+      localStorage.setItem('proman_whatsapp_backup', formattedLink);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'settings/whatsapp');
+      console.error("Save Error:", err);
     }
   };
 
